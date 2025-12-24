@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Minecraft (Java) Server Status</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; }
+    .up { background:#e7f7ec; color:#126b2d; }
+    .down { background:#fdecec; color:#8a1f1f; }
+    .muted { color:#666; }
+    code { background:#f6f6f6; padding:2px 6px; border-radius:6px; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #ccc; background:#fff; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>Minecraft Server Status (Java)</h1>
+
+  <div class="card">
+    <p>Server: <code id="serverLabel"></code></p>
+    <p>Status: <span id="pill" class="pill muted">Checking…</span></p>
+    <p class="muted" id="info">—</p>
+    <p class="muted" style="font-size:0.9rem;">Last checked: <span id="time">—</span></p>
+    <button id="btn">Refresh</button>
+  </div>
+
+  <script>
+    // TODO: set these
+    const MC_HOST = "minecraft.mochii.site";
+    const MC_PORT = 25565;
+
+    // TODO: set to your deployed Worker URL (see #2)
+    const STATUS_ENDPOINT = "https://YOUR-WORKER.your-subdomain.workers.dev/status";
+
+    const serverLabel = document.getElementById("serverLabel");
+    const pill = document.getElementById("pill");
+    const info = document.getElementById("info");
+    const time = document.getElementById("time");
+    const btn = document.getElementById("btn");
+
+    serverLabel.textContent = `${MC_HOST}:${MC_PORT}`;
+
+    function setPill(state, text) {
+      pill.className = "pill " + (state === "up" ? "up" : state === "down" ? "down" : "muted");
+      pill.textContent = text;
+      time.textContent = new Date().toLocaleString();
+    }
+
+    async function check() {
+      setPill("muted", "Checking…");
+      info.textContent = "Contacting status endpoint…";
+
+      try {
+        const u = new URL(STATUS_ENDPOINT);
+        u.searchParams.set("host", MC_HOST);
+        u.searchParams.set("port", String(MC_PORT));
+
+        const r = await fetch(u.toString(), { cache: "no-store" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+
+        if (data.online) {
+          setPill("up", "UP");
+          const ver = data.version?.name ?? "unknown";
+          const players = data.players ? `${data.players.online}/${data.players.max}` : "—";
+          info.textContent = `Version: ${ver} • Players: ${players}`;
+        } else {
+          setPill("down", "DOWN");
+          info.textContent = data.error ? `Error: ${data.error}` : "Server appears offline.";
+        }
+      } catch (e) {
+        setPill("down", "DOWN");
+        info.textContent = `Request failed: ${e.message}`;
+      }
+    }
+
+    btn.addEventListener("click", check);
+    check();
+    // Optional auto-refresh:
+    // setInterval(check, 30000);
+  </script>
+</body>
+</html>
