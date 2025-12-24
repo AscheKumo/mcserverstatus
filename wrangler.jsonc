@@ -1,5 +1,5 @@
 {
-   "name": "worker-name",
+   "name": "mcserverstatus",
    "compatibility_date": "2025-12-24",
    "main": "src/index.js"
 }
