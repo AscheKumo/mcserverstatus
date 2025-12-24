@@ -17,7 +17,6 @@
       --down-fg: #f87171;
       --btn-bg: rgba(255,255,255,.06);
     }
-
     body {
       margin: 0;
       background: radial-gradient(1200px 600px at 20% 0%, #18223a 0%, var(--bg) 50%);
@@ -25,19 +24,8 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
       line-height: 1.4;
     }
-
-    .wrap {
-      max-width: 760px;
-      margin: 48px auto;
-      padding: 0 16px;
-    }
-
-    h1 {
-      margin: 0 0 14px;
-      font-size: 28px;
-      letter-spacing: 0.2px;
-    }
-
+    .wrap { max-width: 760px; margin: 48px auto; padding: 0 16px; }
+    h1 { margin: 0 0 14px; font-size: 28px; letter-spacing: 0.2px; }
     .card {
       border: 1px solid var(--border);
       background: rgba(17, 24, 39, 0.85);
@@ -46,14 +34,7 @@
       padding: 18px;
       box-shadow: 0 12px 35px rgba(0,0,0,.35);
     }
-
-    .row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
     code {
       background: rgba(255,255,255,.06);
       border: 1px solid var(--border);
@@ -63,7 +44,6 @@
       font-size: 0.95rem;
       color: var(--text);
     }
-
     .pill {
       display: inline-flex;
       align-items: center;
@@ -76,33 +56,19 @@
       text-transform: uppercase;
       font-size: 12px;
     }
-
     .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
+      width: 10px; height: 10px; border-radius: 999px;
       background: var(--muted);
       box-shadow: 0 0 0 3px rgba(156,163,175,.15);
     }
-
     .pill.up { background: var(--up-bg); color: var(--up-fg); }
     .pill.up .dot { background: var(--up-fg); box-shadow: 0 0 0 3px rgba(52,211,153,.18); }
-
     .pill.down { background: var(--down-bg); color: var(--down-fg); }
     .pill.down .dot { background: var(--down-fg); box-shadow: 0 0 0 3px rgba(248,113,113,.18); }
-
     .pill.checking { color: var(--muted); }
     .pill.checking .dot { background: var(--muted); }
 
-    .muted { color: var(--muted); }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
+    .grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
     .kv {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -110,7 +76,7 @@
       background: rgba(255,255,255,.03);
     }
     .kv .k { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-    .kv .v { margin-top: 6px; font-weight: 650; }
+    .kv .v { margin-top: 6px; font-weight: 650; white-space: pre-wrap; }
 
     button {
       margin-left: auto;
@@ -125,11 +91,7 @@
     button:hover { background: rgba(255,255,255,.10); }
     button:active { transform: translateY(1px); }
 
-    footer {
-      margin-top: 14px;
-      font-size: 12px;
-      color: var(--muted);
-    }
+    footer { margin-top: 14px; font-size: 12px; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -145,9 +107,15 @@
 
       <div class="grid">
         <div class="kv">
-          <div class="k">Details</div>
-          <div class="v" id="details">—</div>
+          <div class="k">MOTD</div>
+          <div class="v" id="motd">—</div>
         </div>
+
+        <div class="kv">
+          <div class="k">Version / Players</div>
+          <div class="v" id="vp">—</div>
+        </div>
+
         <div class="kv">
           <div class="k">Last checked</div>
           <div class="v" id="lastChecked">—</div>
@@ -155,7 +123,7 @@
       </div>
 
       <footer>
-        This page checks status via a Cloudflare Worker (browser-safe). If the server is offline, blocked by firewall, or not responding to server-list ping, it will show DOWN.
+        “UP” means the endpoint could retrieve the Java server-list ping data (includes MOTD). If MOTD fetch fails, it will show DOWN.
       </footer>
     </div>
   </div>
@@ -172,22 +140,40 @@
     const serverLabel = document.getElementById("serverLabel");
     const statusPill = document.getElementById("statusPill");
     const statusText = document.getElementById("statusText");
-    const details = document.getElementById("details");
+    const motdEl = document.getElementById("motd");
+    const vpEl = document.getElementById("vp");
     const lastChecked = document.getElementById("lastChecked");
     const refreshBtn = document.getElementById("refreshBtn");
 
     serverLabel.textContent = `${MC_HOST}:${MC_PORT}`;
 
-    function setStatus(state, text, extra) {
+    function setStatus(state, text) {
       statusPill.classList.remove("up", "down", "checking");
       statusPill.classList.add(state);
       statusText.textContent = text;
-      details.textContent = extra || "—";
       lastChecked.textContent = new Date().toLocaleString();
     }
 
+    function pickMotd(data) {
+      // Worker (from mcsrvstat.us) may provide motd as string or null depending on server.
+      // Prefer `motd` we normalized; fallback to raw shapes if present.
+      if (typeof data.motd === "string" && data.motd.trim()) return data.motd.trim();
+
+      const raw = data.raw || {};
+      const clean = raw?.motd?.clean;
+      if (Array.isArray(clean) && clean.join("\n").trim()) return clean.join("\n").trim();
+
+      const text = raw?.motd?.text;
+      if (Array.isArray(text) && text.join("\n").trim()) return text.join("\n").trim();
+
+      return "";
+    }
+
     async function check() {
-      setStatus("checking", "Checking…", "Contacting status endpoint…");
+      setStatus("checking", "Checking…");
+      motdEl.textContent = "Fetching MOTD…";
+      vpEl.textContent = "—";
+
       try {
         const u = new URL(STATUS_ENDPOINT);
         u.searchParams.set("host", MC_HOST);
@@ -195,25 +181,35 @@
 
         const res = await fetch(u.toString(), { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
         const data = await res.json();
 
-        if (data.online) {
+        const motd = pickMotd(data);
+
+        // Per your request: determine UP/DOWN by whether we can retrieve the Java MOTD.
+        // If online is true but motd missing, treat as DOWN (or "UNKNOWN")—here we mark DOWN.
+        if (data.online && motd) {
+          setStatus("up", "UP");
+          motdEl.textContent = motd;
+
           const ver = data.version?.name ?? "unknown";
           const players = data.players ? `${data.players.online ?? "?"}/${data.players.max ?? "?"}` : "—";
-          setStatus("up", "UP", `Version: ${ver} • Players: ${players}`);
+          vpEl.textContent = `Version: ${ver} • Players: ${players}`;
         } else {
-          setStatus("down", "DOWN", data.error ? `Error: ${data.error}` : "Server appears offline.");
+          setStatus("down", "DOWN");
+          motdEl.textContent = motd || "MOTD not available (server offline, not responding to ping, or API didn't return it).";
+          vpEl.textContent = data.error ? `Error: ${data.error}` : "—";
         }
       } catch (e) {
-        setStatus("down", "DOWN", `Request failed: ${e.message}`);
+        setStatus("down", "DOWN");
+        motdEl.textContent = "Failed to fetch MOTD.";
+        vpEl.textContent = `Request failed: ${e.message}`;
       }
     }
 
     refreshBtn.addEventListener("click", check);
     check();
 
-    // Optional: auto-refresh every 30 seconds
+    // Optional auto-refresh:
     // setInterval(check, 30000);
   </script>
 </body>
